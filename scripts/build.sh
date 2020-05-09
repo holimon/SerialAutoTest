@@ -1,0 +1,1 @@
+#!/bin/shcd "$( dirname "$0"  )"go build -ldflags "-s -w" -i -o ../bin/SerialTestServer ../cmd/main.go
