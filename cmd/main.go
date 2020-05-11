@@ -55,8 +55,14 @@ func init() {
 
 func main() {
 	sig := make(chan os.Signal)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	go serialcom.RuntimeSerialcom(sig)
+	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
+	err := serialcom.ComOpen(configs.ServerConfig.SerialCom, configs.ServerConfig.BaudRate)
+	if err != nil {
+		logger.AppLogger.Error("打开串口设备失败")
+	}
+	defer serialcom.ComClose()
+	go serialcom.RuntimeSerialcom()
+	go serialcom.RuntimeScreen()
 	go server.RuntimeServer()
 	<-sig
 	logger.AppLogger.Info("收到终止信号")
