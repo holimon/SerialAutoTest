@@ -7,10 +7,10 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/tarm/goserial"
-	"go.uber.org/zap"
 	"io"
 	"os"
 	"strconv"
+	"syscall"
 	"time"
 )
 
@@ -29,6 +29,8 @@ func ComOpen(com string, baud int) (err error) {
 	OpenCom.sercom, err = serial.OpenPort(sercfg)
 	if err == nil {
 		OpenCom.opened = true
+	} else {
+		fmt.Println("打开串口设备失败")
 	}
 	return
 }
@@ -53,10 +55,11 @@ func ComWrite(p []byte) (n int, err error) {
 	return
 }
 
-func RuntimeSerialcom() {
+func RuntimeSerialcom(sig chan os.Signal) {
 	for {
 		if !OpenCom.opened {
-			continue
+			sig <- syscall.SIGTERM
+			return
 		}
 		readbuf := make([]byte, 1024)
 		rlen, err := ComRead(readbuf)
@@ -65,7 +68,7 @@ func RuntimeSerialcom() {
 		}
 		readbuf = readbuf[:rlen]
 		fmt.Print(string(readbuf))
-		logger.AppLogger.Info("read", zap.String("content", string(readbuf)))
+		logger.AppLogger.Write(readbuf)
 		//将读取到的串口数据推送到注册地址
 		for _, v := range configs.ClinetListened {
 			params := map[string]string{"content": string(readbuf), "timestamp": strconv.FormatInt(time.Now().UnixNano(), 10)}

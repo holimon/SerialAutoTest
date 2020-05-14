@@ -50,20 +50,20 @@ func init() {
 	fmt.Println("access token is ", configs.ServerConfig.AccessToken)
 	fmt.Println("Please carry access_token for HTTP request header.Like:access_token:\"4e80c5fc061e67daefea8ab92d9060e5776fe6c4\"")
 	fmt.Println("**************************************************************************************************************")
-	logger.LoggerInit()
 }
 
 func main() {
-	sig := make(chan os.Signal)
-	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
-	err := serialcom.ComOpen(configs.ServerConfig.SerialCom, configs.ServerConfig.BaudRate)
-	if err != nil {
-		logger.AppLogger.Error("打开串口设备失败")
+	if err := logger.AppLogger.Open(); err == nil {
+		defer logger.AppLogger.Close()
 	}
-	defer serialcom.ComClose()
-	go serialcom.RuntimeSerialcom()
+	var sig chan os.Signal = make(chan os.Signal)
+	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	if err := serialcom.ComOpen(configs.ServerConfig.SerialCom, configs.ServerConfig.BaudRate); err == nil {
+		defer serialcom.ComClose()
+	}
+	go serialcom.RuntimeSerialcom(sig)
 	go serialcom.RuntimeScreen()
 	go server.RuntimeServer()
 	<-sig
-	logger.AppLogger.Info("收到终止信号")
+	fmt.Println("收到终止信号")
 }

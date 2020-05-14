@@ -2,49 +2,57 @@ package logger
 
 import (
 	"SerialTest/configs"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
+	"bufio"
+	"bytes"
+	"fmt"
+	"os"
+	"sync"
+	"time"
 )
 
-var AppLogger, _ = zap.NewProduction()
+type Log struct {
+	logObj   *os.File
+	logWri   *bufio.Writer
+	mutexWri sync.Mutex
+	opened   bool
+}
 
-func LoggerInit() {
-	hook := lumberjack.Logger{
-		Filename:   configs.LogPathConfig, // 日志文件路径
-		MaxSize:    1,                     // 每个日志文件保存的最大尺寸 单位：M
-		MaxBackups: 1,                     // 日志文件最多保存多少个备份
-		MaxAge:     7,                     // 文件最多保存多少天
-		Compress:   false,                 // 是否压缩
+type Logger interface {
+	Open() (err error)
+	Write(data []byte) (len int, err error)
+	Close()
+}
+
+var AppLogger Logger = &Log{}
+
+func (l *Log) Open() (err error) {
+	if _, err := os.Stat(configs.LogPathConfig); err == nil || os.IsExist(err) {
+		if err := os.Remove(configs.LogPathConfig); err != nil {
+			fmt.Println("已存在日志文件删除失败")
+		}
 	}
-	encoderConfig := zapcore.EncoderConfig{
-		TimeKey:        "time",
-		LevelKey:       "level",
-		NameKey:        "AppLogger",
-		CallerKey:      "linenum",
-		MessageKey:     "msg",
-		StacktraceKey:  "stacktrace",
-		LineEnding:     zapcore.DefaultLineEnding,
-		EncodeLevel:    zapcore.LowercaseLevelEncoder,  // 小写编码器
-		EncodeTime:     zapcore.ISO8601TimeEncoder,     // ISO8601 UTC 时间格式
-		EncodeDuration: zapcore.SecondsDurationEncoder, //
-		EncodeCaller:   zapcore.ShortCallerEncoder,     // 全路径编码器
-		EncodeName:     zapcore.FullNameEncoder,
+	if l.logObj, err = os.OpenFile(configs.LogPathConfig, os.O_RDWR|os.O_CREATE, 0644); err == nil {
+		l.logWri = bufio.NewWriterSize(l.logObj, 32)
+		l.opened = true
 	}
-	// 设置日志级别
-	atomicLevel := zap.NewAtomicLevel()
-	atomicLevel.SetLevel(zap.InfoLevel)
-	core := zapcore.NewCore(
-		zapcore.NewJSONEncoder(encoderConfig), // 编码器配置
-		//zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(&hook)), // 打印到控制台和文件
-		zapcore.NewMultiWriteSyncer(zapcore.AddSync(&hook)), // 打印到文件
-		atomicLevel, // 日志级别
-	)
-	// 开启开发模式，堆栈跟踪
-	caller := zap.AddCaller()
-	//开启文件及行号
-	development := zap.Development()
-	AppLogger = zap.New(core, caller, development)
-	//AppLogger = zap.New(core)
 	return
+}
+
+func (l *Log) Write(data []byte) (len int, err error) {
+	if l.opened {
+		l.mutexWri.Lock()
+		bytes.ReplaceAll(data, []byte(`\n`), []byte(time.Now().Format("2006-01-02 15:04:05")+"\r\n"))
+		//data = time.Now().Format("2006-01-02 15:04:05") + " : " + data
+		len, err = l.logWri.Write(data)
+		l.logWri.Flush()
+		l.mutexWri.Unlock()
+	}
+	return
+}
+
+func (l *Log) Close() {
+	if l.opened {
+		defer l.logObj.Close()
+		l.opened = false
+	}
 }

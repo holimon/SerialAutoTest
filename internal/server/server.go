@@ -2,10 +2,8 @@ package server
 
 import (
 	"SerialTest/configs"
-	"SerialTest/internal/logger"
 	"SerialTest/internal/serialcom"
 	"github.com/kataras/iris/v12"
-	"go.uber.org/zap"
 )
 
 func registerHandler(ctx iris.Context) {
@@ -42,7 +40,6 @@ func writerHandler(ctx iris.Context) {
 	} else {
 		_, err := serialcom.ComWrite([]byte(t.Content))
 		if err == nil {
-			logger.AppLogger.Info("write", zap.String("content", t.Content))
 			ctx.JSON(iris.Map{
 				"code":    200,
 				"message": "指令写入成功",
@@ -56,9 +53,14 @@ func writerHandler(ctx iris.Context) {
 	}
 }
 
+func logHandler(ctx iris.Context) {
+	ctx.SendFile(configs.LogPathConfig, configs.LogPathConfig)
+}
+
 func RuntimeServer() {
 	app := iris.New()
 	app.Get("/serialtest/v1/register", registerHandler)
 	app.Get("/serialtest/v1/writer", writerHandler)
+	app.Get("/serialtest/v1/log", logHandler)
 	app.Listen(configs.ServerConfig.ServerAddr)
 }
